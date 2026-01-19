@@ -2,7 +2,6 @@ from typing import Dict
 import logging
 import serial
 import construct
-import sys
 import logging
 
 logging.basicConfig(
@@ -149,10 +148,7 @@ class Pylontech:
     )
 
     def __init__(self, serial_port='/dev/ttyUSB0', baudrate=115200):
-        if sys.platform == "win32":
-            self.s = serial.Serial(serial_port, baudrate, bytesize=8, parity=serial.PARITY_NONE, stopbits=1, timeout=2)
-        else:
-            self.s = serial.Serial(serial_port, baudrate, bytesize=8, parity=serial.PARITY_NONE, stopbits=1, timeout=2, exclusive=True)
+        self.s = serial.Serial(serial_port, baudrate, bytesize=8, parity=serial.PARITY_NONE, stopbits=1, timeout=2, exclusive=True)
 
     @staticmethod
     def get_frame_checksum(frame: bytes):
