@@ -2,8 +2,16 @@ from typing import Dict
 import logging
 import serial
 import construct
+import sys
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s:%(funcName)s:%(lineno)d - %(levelname)s - %(message)s'
+)
 
 logger = logging.getLogger(__name__)
+logger_CallerMaxLength = 15
 
 class HexToByte(construct.Adapter):
     def _decode(self, obj, context, path) -> bytes:
@@ -141,8 +149,10 @@ class Pylontech:
     )
 
     def __init__(self, serial_port='/dev/ttyUSB0', baudrate=115200):
-        self.s = serial.Serial(serial_port, baudrate, bytesize=8, parity=serial.PARITY_NONE, stopbits=1, timeout=2, exclusive=True)
-
+        if sys.platform == "win32":
+            self.s = serial.Serial(serial_port, baudrate, bytesize=8, parity=serial.PARITY_NONE, stopbits=1, timeout=2)
+        else:
+            self.s = serial.Serial(serial_port, baudrate, bytesize=8, parity=serial.PARITY_NONE, stopbits=1, timeout=2, exclusive=True)
 
     @staticmethod
     def get_frame_checksum(frame: bytes):
@@ -171,16 +181,20 @@ class Pylontech:
 
     def send_cmd(self, address: int, cmd, info: bytes = b''):
         raw_frame = self._encode_cmd(address, cmd, info)
+        logger.debug(f"{raw_frame=}")
         self.s.write(raw_frame)
 
 
     def _encode_cmd(self, address: int, cid2: int, info: bytes = b''):
+        ver = 0x20
         cid1 = 0x46
 
         info_length = Pylontech.get_info_length(info)
 
-        frame = "{:02X}{:02X}{:02X}{:02X}{:04X}".format(0x20, address, cid1, cid2, info_length).encode()
+        frame = "{:02X}{:02X}{:02X}{:02X}{:04X}".format(ver, address, cid1, cid2, info_length).encode()
         frame += info
+
+        logger.info(f"VER=%s; ADDR=%s; CID1={cid1:02X}H; CID2={cid2:02X}H; frame.INFO=%s", ver, address, info.decode())
 
         frame_chksum = Pylontech.get_frame_checksum(frame)
         whole_frame = (b"~" + frame + "{:04X}".format(frame_chksum).encode() + b"\r")
@@ -212,9 +226,15 @@ class Pylontech:
 
     def read_frame(self):
         raw_frame = self.s.readline()
-        f = self._decode_hw_frame(raw_frame=raw_frame)
-        parsed = self._decode_frame(f)
-        return parsed
+        logger.debug(f"{raw_frame=}")
+        chk_frame = self._decode_hw_frame(raw_frame=raw_frame)
+        logger.debug(f"{chk_frame=}")
+        dec_frame = self._decode_frame(chk_frame)
+        data = b'\x05\xff\x0a';
+        logger.info(f"VER=%s; ADDR=%s; CID1={dec_frame.cid1[0]:02X}H; CID2={dec_frame.cid2[0]:02X}H; frame.INFO=%s", ord(dec_frame.ver), ord(dec_frame.adr), dec_frame.info.hex(" ").upper())
+
+        logger.debug(f"{dec_frame=}")
+        return dec_frame
 
 
     def scan_for_batteries(self, start=0, end=255) -> Dict[int, str]:
