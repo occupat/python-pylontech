@@ -3,6 +3,7 @@ import logging
 import serial
 import construct
 import logging
+import time
 
 logging.basicConfig(
     level=logging.INFO,
@@ -300,9 +301,13 @@ class Pylontech:
         self.send_cmd(2, 0x42, b'FF')
         f = self.read_frame()
 
-        # infoflag = f.info[0]
-        d = self.get_values_fmt.parse(f.info[1:])
-        return d
+        if f.cid2 == b'\x00':
+#            infoflag = f.info[0]
+            d = self.get_values_fmt.parse(f.info[1:])
+            return d
+        else:
+            return -1
+        return -2
 
     def get_values_single(self, dev_id):
         bdevid = "{:02X}".format(dev_id).encode()
